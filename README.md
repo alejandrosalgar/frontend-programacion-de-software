@@ -1,154 +1,334 @@
-# Frontend — Aplicación Angular
+# Frontend — Programación de software
 
-Documentación orientativa del cliente web que consume el backend en **Python (FastAPI)**. El objetivo es una aplicación con **autenticación** y **gestión CRUD** de **ocho entidades**, con navegación por **sidebar** y **grillas (grids)** por recurso.
-
----
-
-## 1. ¿Qué es el frontend?
-
-El **frontend** es la parte de la aplicación que el usuario ve y usa en el navegador: pantallas, formularios, tablas, menús y mensajes. No ejecuta la lógica de negocio ni accede directamente a la base de datos; **pide datos y acciones al backend** mediante **HTTP** (por ejemplo, peticiones `GET`, `POST`, `PUT`, `DELETE`) y muestra las respuestas.
-
-En este proyecto, el frontend será una **SPA** (Single Page Application): una sola página cargada y el resto de “pantallas” se cambia sin recargar todo el documento, usando el framework **Angular**.
+Cliente web en **Angular** con **Angular Material** que consume la API REST del backend **FastAPI** (`backend-programacion-software`). Incluye **login de demostración**, **layout con menú lateral colapsable** y **CRUD** por cada entidad expuesta en el API.
 
 ---
 
-## 2. ¿Qué es Angular?
+## Tabla de contenidos
 
-**Angular** es un framework de **TypeScript** para construir aplicaciones web estructuradas. Ofrece:
-
-| Concepto | Uso en este proyecto |
-|----------|----------------------|
-| **Componentes** | Pantallas reutilizables (login, layout con sidebar, cada grid, formularios de alta/edición). |
-| **Servicios** | Llamadas HTTP al API de FastAPI, manejo de tokens de sesión. |
-| **Routing** | Rutas protegidas tras el login; una ruta por entidad (o por vista CRUD). |
-| **Forms** | Formularios reactivos para crear y editar registros. |
-| **HttpClient** | Cliente HTTP para consumir el backend REST. |
-
-La documentación oficial está en [angular.dev](https://angular.dev).
-
----
-
-## 3. Cómo se consume el backend (FastAPI)
-
-El backend expone una **API REST** (típicamente JSON). El frontend **no** importa código Python; solo envía peticiones a URLs base del servidor, por ejemplo:
-
-- `https://api.ejemplo.com` o `http://localhost:8000` (según entorno).
-
-### Flujo habitual
-
-1. **Login**: el usuario envía credenciales (`POST /auth/login` o ruta equivalente que defina el backend).
-2. **Respuesta**: el backend devuelve un **token** (JWT u otro esquema) y datos del usuario.
-3. **Peticiones siguientes**: el frontend adjunta el token en el header `Authorization: Bearer <token>`.
-4. **CRUD por entidad**: para cada recurso, el frontend usa los verbos HTTP acordados con el API:
-
-| Acción | HTTP | Ejemplo de ruta (convención REST) |
-|--------|------|-----------------------------------|
-| Listar / leer muchos | `GET` | `/entidades` |
-| Leer uno | `GET` | `/entidades/{id}` |
-| Crear | `POST` | `/entidades` |
-| Actualizar | `PUT` o `PATCH` | `/entidades/{id}` |
-| Eliminar | `DELETE` | `/entidades/{id}` |
-
-Las rutas exactas deben coincidir con las que exponga tu proyecto FastAPI (OpenAPI/Swagger suele estar en `/docs`).
-
-### En Angular
-
-- Se centraliza la **URL base** del API (por ejemplo en `environment.ts`).
-- Un **interceptor HTTP** puede inyectar el token y manejar errores 401 (cerrar sesión o redirigir al login).
-- Los **servicios** por dominio (por entidad) encapsulan `HttpClient` y devuelven `Observable` o se adaptan a señales según la versión de Angular.
+1. [Stack tecnológico](#stack-tecnológico)
+2. [Requisitos previos](#requisitos-previos)
+3. [Estructura de carpetas del repositorio](#estructura-de-carpetas-del-repositorio)
+4. [Cómo obtener el proyecto (clonar o copiar)](#cómo-obtener-el-proyecto-clonar-o-copiar)
+5. [Instalación paso a paso](#instalación-paso-a-paso)
+6. [Configuración de la URL del API](#configuración-de-la-url-del-api)
+7. [Cómo ejecutar en desarrollo](#cómo-ejecutar-en-desarrollo)
+8. [Cómo compilar para producción](#cómo-compilar-para-producción)
+9. [Arquitectura de la aplicación Angular](#arquitectura-de-la-aplicación-angular)
+10. [Rutas y navegación](#rutas-y-navegación)
+11. [Componentes y convenciones](#componentes-y-convenciones)
+12. [Servicios HTTP y modelos](#servicios-http-y-modelos)
+13. [Autenticación y usuario de auditoría](#autenticación-y-usuario-de-auditoría)
+14. [Integración con el backend (CORS)](#integración-con-el-backend-cors)
+15. [Problemas frecuentes](#problemas-frecuentes)
 
 ---
 
-## 4. Alcance funcional previsto
+## Stack tecnológico
 
-- **Login**: pantalla de inicio de sesión; tras éxito, acceso al área principal.
-- **Ocho entidades**: cada una con operaciones **CRUD** completas.
-- **Sidebar**: menú lateral con una entrada por entidad (y opcionalmente inicio/cierre de sesión).
-- **Por entidad**: una vista tipo **grid** (tabla con paginación/filtros según se defina) con acciones listar, crear, editar y eliminar.
+| Tecnología | Uso |
+|------------|-----|
+| **Angular 20** | Framework SPA, componentes standalone, signals donde aplica |
+| **TypeScript** | Lenguaje del proyecto |
+| **Angular Material 20** | UI: tablas, formularios, diálogos, sidenav, toolbar, temas M3 |
+| **RxJS** | Observables en llamadas HTTP |
+| **Angular Router** | Rutas, lazy loading, `withViewTransitions()` |
+| **HttpClient** | Cliente REST hacia FastAPI |
 
-La lista concreta de las 8 entidades debe documentarse cuando esté definida en el backend (nombres de modelos y endpoints).
+El código de la aplicación vive en la carpeta **`web/`**. En la raíz de este repositorio hay un `package.json` mínimo que **reenvía** los comandos a `web/` para poder ejecutar `npm start` sin entrar en `web`.
 
 ---
 
-## 5. Estructura de carpetas propuesta (Angular)
+## Requisitos previos
 
-Estructura orientativa, alineada con buenas prácticas y fácil de escalar a 8 módulos de entidad:
+- **Node.js** LTS (recomendado v20 o v22): [https://nodejs.org](https://nodejs.org)
+- **npm** (viene con Node)
+- Opcional: **Angular CLI** global (`npm install -g @angular/cli`) — no es obligatorio si usas `npx ng` o los scripts de `package.json`
 
-```
-src/
-├── app/
-│   ├── core/                    # Singletons: auth, interceptors, guards
-│   │   ├── auth/
-│   │   │   ├── auth.service.ts
-│   │   │   ├── auth.guard.ts
-│   │   │   └── login/
-│   │   └── interceptors/
-│   │       └── auth.interceptor.ts
-│   ├── shared/                  # Componentes y pipes reutilizables
-│   │   ├── components/
-│   │   └── models/              # Interfaces TypeScript alineadas al API
-│   ├── layout/                  # Shell: sidebar + router-outlet
-│   │   └── main-layout/
-│   ├── features/                # Una carpeta por entidad + login
-│   │   ├── login/
-│   │   ├── entidad-1/
-│   │   ├── entidad-2/
-│   │   └── ...                  # hasta entidad-8
-│   ├── app.routes.ts
-│   ├── app.config.ts
-│   └── app.component.ts
-├── environments/
-│   ├── environment.ts           # apiUrl, etc.
-│   └── environment.development.ts
-└── main.ts
+Comprueba versiones:
+
+```bash
+node -v
+npm -v
 ```
 
-- **`core/`**: servicios que deben existir una sola vez (autenticación, interceptor).
-- **`shared/`**: tablas genéricas, diálogos de confirmación, modelos compartidos.
-- **`layout/`**: marco visual con **sidebar** y área donde se cargan las rutas hijas.
-- **`features/<entidad>/`**: componente de **grid**, diálogo o página de formulario, y `*.service.ts` que llama al FastAPI para esa entidad.
+---
+
+## Estructura de carpetas del repositorio
+
+```
+frontend-programacion-de-software/          ← Raíz del repo (scripts npm cómodos)
+├── package.json                            ← Delega start/build/test a web/
+├── README.md                               ← Este archivo
+└── web/                                    ← Proyecto Angular real
+    ├── angular.json
+    ├── package.json                        ← Dependencias y scripts ng
+    ├── tsconfig.json
+    ├── src/
+    │   ├── index.html
+    │   ├── main.ts
+    │   ├── styles.scss                     ← Tema Material + estilos globales
+    │   ├── environments/
+    │   │   ├── environment.ts              ← Desarrollo (apiUrl)
+    │   │   └── environment.prod.ts         ← Producción (reemplazo en build prod)
+    │   └── app/
+    │       ├── app.ts                      ← Raíz: solo <router-outlet />
+    │       ├── app.html
+    │       ├── app.scss
+    │       ├── app.config.ts               ← HttpClient, animaciones, router + view transitions
+    │       ├── app.routes.ts               ← Rutas y lazy loading
+    │       ├── models/
+    │       │   └── api.models.ts           ← Interfaces TypeScript alineadas al API
+    │       ├── core/
+    │       │   ├── audit-context.service.ts
+    │       │   ├── audit-user.guard.ts
+    │       │   └── services/               ← Un servicio por entidad (HTTP)
+    │       ├── shared/
+    │       │   └── ids.ts                  ← Utilidad para mostrar UUIDs cortos
+    │       └── features/
+    │           ├── login/                  ← Pantalla de acceso
+    │           ├── shell/                  ← Layout: sidenav + toolbar + outlet
+    │           ├── usuarios/               ← Lista + diálogo CRUD
+    │           ├── categorias/
+    │           ├── productos/
+    │           ├── pedidos/
+    │           ├── detalles-pedido/
+    │           └── pagos/
+    └── public/
+        └── favicon.ico
+```
+
+Cada carpeta bajo **`features/<entidad>/`** sigue el mismo patrón:
+
+- **`<entidad>-list.ts|html|scss`**: pantalla con `mat-table`, paginador, botones y apertura de diálogo.
+- **`<entidad>-dialog.ts|html`**: formulario en `MatDialog` para crear/editar (sin `.scss` propio si los estilos vienen de Material y `styles.scss`).
 
 ---
 
-## 6. Rutas sugeridas
+## Cómo obtener el proyecto (clonar o copiar)
+
+### Opción A — Clonar con Git
+
+Si el proyecto está en un servidor Git:
+
+```bash
+git clone <URL-del-repositorio> frontend-programacion-de-software
+cd frontend-programacion-de-software
+```
+
+### Opción B — Copiar carpeta (USB, zip, Drive)
+
+1. Copia toda la carpeta **`frontend-programacion-de-software`** (incluyendo **`web/`**).
+2. No hace falta copiar **`web/node_modules`** si vas a ejecutar `npm install` de nuevo (recomendado).
+3. Abre una terminal en **`frontend-programacion-de-software`** (raíz) o directamente en **`web/`**.
+
+---
+
+## Instalación paso a paso
+
+Desde la **raíz** del frontend (recomendado):
+
+```bash
+cd frontend-programacion-de-software
+cd web
+npm install
+```
+
+O en un solo paso desde la raíz (si tu npm lo permite):
+
+```bash
+cd frontend-programacion-de-software/web && npm install
+```
+
+Esto instala Angular, Material, CDK, etc. según **`web/package.json`**.
+
+---
+
+## Configuración de la URL del API
+
+La base del API se define en:
+
+- **`web/src/environments/environment.ts`** (desarrollo por defecto al hacer `ng serve`)
+- **`web/src/environments/environment.prod.ts`** (sustituye al anterior en **`ng build` de producción** — ver `angular.json` → `fileReplacements`)
+
+Ejemplo desarrollo:
+
+```ts
+export const environment = {
+  production: false,
+  apiUrl: 'http://127.0.0.1:8000',
+};
+```
+
+Cambia **`apiUrl`** si tu FastAPI corre en otro host o puerto (por ejemplo otro PC en la red: `http://192.168.1.10:8000`).
+
+Los servicios en **`core/services/`** concatenan rutas como `${environment.apiUrl}/usuarios/`, etc.
+
+---
+
+## Cómo ejecutar en desarrollo
+
+1. Arranca el **backend** FastAPI (puerto **8000** por defecto en ese proyecto).
+2. En una terminal, desde **`web/`**:
+
+```bash
+cd web
+npm start
+```
+
+O desde la **raíz** del repo frontend:
+
+```bash
+npm start
+```
+
+3. Abre el navegador en **http://localhost:4200** (puerto por defecto de `ng serve`).
+
+Si el puerto 4200 está ocupado, Angular mostrará otro (mira la salida de la consola).
+
+---
+
+## Cómo compilar para producción
+
+```bash
+cd web
+npm run build
+```
+
+Salida típica: **`web/dist/web/`** (nombre del proyecto en `angular.json`).
+
+Para servir esa carpeta con un servidor estático (ejemplo):
+
+```bash
+npx --yes serve -s dist/web/browser -l 8080
+```
+
+(Ajusta la ruta si tu `angular.json` cambia el directorio de salida.)
+
+---
+
+## Arquitectura de la aplicación Angular
+
+### Arranque
+
+- **`main.ts`**: arranca la aplicación con `bootstrapApplication(App, appConfig)`.
+- **`app.config.ts`**:
+  - `provideHttpClient()` para llamadas REST.
+  - `provideAnimationsAsync()` para animaciones de Material.
+  - `provideRouter(routes, withViewTransitions())` para transiciones suaves entre rutas (navegadores compatibles).
+
+### Raíz
+
+- **`app.ts`**: componente raíz con **solo** `<router-outlet />` — no hay lógica de negocio aquí.
+
+### Carga perezosa (lazy loading)
+
+Las rutas cargan componentes con **`loadComponent`** para que cada pantalla sea un **chunk** separado y la primera carga sea más liviana.
+
+---
+
+## Rutas y navegación
 
 | Ruta | Descripción |
 |------|-------------|
-| `/login` | Formulario de acceso (pública). |
-| `` | Área autenticada con layout + sidebar. |
-| `/entidad-1`, `/entidad-2`, … | Vista grid + CRUD de cada entidad (nombres según negocio). |
+| `/` | Redirige a `/login` |
+| `/login` | Login de demostración o alta del primer usuario |
+| `/app` | Layout principal (requiere usuario de auditoría en `localStorage`) |
+| `/app/usuarios` | CRUD usuarios |
+| `/app/categorias` | CRUD categorías |
+| `/app/productos` | CRUD productos |
+| `/app/pedidos` | CRUD pedidos |
+| `/app/detalles-pedido` | CRUD detalles de pedido |
+| `/app/pagos` | CRUD pagos |
+| `**` | Cualquier otra ruta → `/login` |
 
-El **guard** de autenticación protege las rutas hijas del layout y redirige a `/login` si no hay sesión válida.
-
----
-
-## 7. Pasos para arrancar el proyecto (cuando se cree el código)
-
-1. Instalar [Node.js](https://nodejs.org/) (LTS recomendado).
-2. Instalar Angular CLI: `npm install -g @angular/cli`.
-3. Crear el proyecto: `ng new nombre-proyecto` (opciones: routing sí, estilos a elección).
-4. Configurar `environment*.ts` con la **URL base** del API FastAPI.
-5. Implementar **login** y **servicio de auth** según el contrato del backend.
-6. Añadir **HttpClient** y el **interceptor** de token en `app.config.ts`.
-7. Crear el **layout** con **sidebar** y rutas lazy-loaded por feature (`loadChildren`).
-8. Por cada una de las **8 entidades**: servicio HTTP + pantalla grid + formularios/modales CRUD.
-9. Probar contra el backend en local o desplegado; revisar CORS en FastAPI si el front y el API están en orígenes distintos.
+La ruta `/app` está protegida por **`auditUserGuard`**: si no hay UUID de usuario de auditoría guardado, redirige al login.
 
 ---
 
-## 8. Notas de integración con FastAPI
+## Componentes y convenciones
 
-- **CORS**: el backend debe permitir el origen del frontend (puerto de `ng serve` o dominio de producción).
-- **Esquema de datos**: los DTOs del API deben reflejarse en **interfaces TypeScript** en `shared/models` o por feature.
-- **Documentación**: usar `/docs` (Swagger) del FastAPI como contrato de referencia para URLs, cuerpos y códigos de respuesta.
+### `features/login`
+
+- Formulario **usuario + contraseña** (la clave no se valida contra el servidor; solo debe existir el `nombre_usuario` en `GET /usuarios/`).
+- Si no hay usuarios, muestra formulario para **crear el primero** (POST).
+
+### `features/shell/main-layout`
+
+- **`mat-sidenav-container`** con **`autosize`**: recalcula el margen del contenido cuando el menú cambia de ancho (colapsar/expandir).
+- Menú lateral con iconos, estado colapsado persistido en **`localStorage`** (`shell_sidebar_collapsed`).
+- Barra superior: selector de **usuario de auditoría**, cierre de sesión.
+
+### Listas CRUD (`*-list`)
+
+- Tabla Material (`mat-table`), paginación, botones editar/eliminar, botón “Nuevo” abre **`MatDialog`** con el `*-dialog` correspondiente.
+
+### Diálogos (`*-dialog`)
+
+- Formularios reactivos o con `ngModel` según el archivo; envían al servicio **create** o **update** según el modo.
+
+Patrón recomendado al **añadir una nueva entidad** del backend:
+
+1. Añadir interfaces en **`models/api.models.ts`**.
+2. Crear **`core/services/mi-entidad.service.ts`** (listar, get, crear, actualizar, borrar).
+3. Crear carpeta **`features/mi-entidad/`** con `mi-entidad-list` + `mi-entidad-dialog`.
+4. Registrar ruta hija bajo **`/app`** en **`app.routes.ts`**.
+5. Añadir entrada en el array **`nav`** de **`main-layout.ts`** y el ícono en el template.
 
 ---
 
-## 9. Próximos pasos
+## Servicios HTTP y modelos
 
-- Sustituir `entidad-1` … `entidad-8` por los **nombres reales** de dominio.
-- Añadir al README la **URL del repositorio del backend** y variables de entorno necesarias cuando existan.
+- **`models/api.models.ts`**: tipos alineados con los cuerpos y respuestas del FastAPI (UUID como `string` en TypeScript).
+- **`core/services/*.service.ts`**: cada uno usa `HttpClient` y `environment.apiUrl`.
+  - Listados y altas usan rutas **con barra final** (`/usuarios/`, `/categorias/`, …) para coincidir con el enrutado del backend.
 
 ---
 
-*README generado como guía del frontend Angular para el curso; actualizar conforme evolucione el API y el código.*
+## Autenticación y usuario de auditoría
+
+No hay JWT en esta versión: el “login” solo asocia un **usuario existente** del API y guarda su **`id_usuario`** en:
+
+- **`AuditContextService`** → `localStorage` bajo la clave **`pos_audit_usuario_id`**.
+
+Ese UUID se usa en los cuerpos que el backend exige para **trazabilidad** (`id_usuario_creacion`, `id_usuario_edita`, etc.).
+
+---
+
+## Integración con el backend (CORS)
+
+El backend debe permitir el origen del frontend (por ejemplo `http://localhost:4200`). En el proyecto de ejemplo, CORS está configurado en **`src/api/app.py`** del repositorio FastAPI.
+
+Si cambias el puerto del `ng serve`, añade ese origen en CORS del backend.
+
+---
+
+## Problemas frecuentes
+
+| Síntoma | Qué revisar |
+|---------|-------------|
+| **404** en `/usuarios` o similares | Que el backend use rutas de colección con **`/`** final (`GET /usuarios/`) y que el front llame a la misma convención. |
+| **CORS error** en consola | Origen del front permitido en FastAPI; backend en marcha. |
+| **`npm start` no existe** en la raíz | Ejecuta desde **`web/`** o usa el `package.json` de la raíz que delega a `web`. |
+| **Hueco en blanco** al colapsar el menú | Debe estar **`autosize`** en `mat-sidenav-container` y `updateContentMargins()` tras colapsar (ya integrado en `main-layout`). |
+| **No carga datos** | `environment.apiUrl` correcto; API levantada en ese host/puerto. |
+
+---
+
+## Comandos útiles (referencia rápida)
+
+| Acción | Comando (desde `web/`) |
+|--------|-------------------------|
+| Instalar dependencias | `npm install` |
+| Servidor desarrollo | `npm start` |
+| Compilar producción | `npm run build` |
+| Tests unitarios | `npm test` |
+| CLI Angular | `npx ng generate component ...` |
+
+---
+
+## Licencia y uso docente
+
+Este proyecto está pensado para **docencia**: los alumnos pueden clonarlo, instalar dependencias, conectar su propio backend y extender entidades siguiendo la misma estructura de **servicio + lista + diálogo + rutas**.
+
+Si publicas mejoras (temas, pruebas e2e, login real con JWT), documenta los cambios en este README o en un `CHANGELOG.md` aparte.
