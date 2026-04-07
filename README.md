@@ -17,10 +17,16 @@ Cliente web en **Angular** con **Angular Material** que consume la API REST del 
 9. [Arquitectura de la aplicación Angular](#arquitectura-de-la-aplicación-angular)
 10. [Rutas y navegación](#rutas-y-navegación)
 11. [Componentes y convenciones](#componentes-y-convenciones)
-12. [Servicios HTTP y modelos](#servicios-http-y-modelos)
-13. [Autenticación y usuario de auditoría](#autenticación-y-usuario-de-auditoría)
-14. [Integración con el backend (CORS)](#integración-con-el-backend-cors)
-15. [Problemas frecuentes](#problemas-frecuentes)
+12. [Anatomía de un componente Angular (`.ts`, `.html`, `.scss`)](#anatomía-de-un-componente-angular-ts-html-scss)
+13. [El archivo TypeScript del componente](#el-archivo-typescript-del-componente)
+14. [La plantilla HTML](#la-plantilla-html)
+15. [Estilos: global vs por componente (SCSS)](#estilos-global-vs-por-componente-scss)
+16. [Tema Material y `styles.scss`](#tema-material-y-stylesscss)
+17. [Ejemplo de flujo: lista CRUD](#ejemplo-de-flujo-lista-crud)
+18. [Servicios HTTP y modelos](#servicios-http-y-modelos)
+19. [Autenticación y usuario de auditoría](#autenticación-y-usuario-de-auditoría)
+20. [Integración con el backend (CORS)](#integración-con-el-backend-cors)
+21. [Problemas frecuentes](#problemas-frecuentes)
 
 ---
 
@@ -274,6 +280,161 @@ Patrón recomendado al **añadir una nueva entidad** del backend:
 3. Crear carpeta **`features/mi-entidad/`** con `mi-entidad-list` + `mi-entidad-dialog`.
 4. Registrar ruta hija bajo **`/app`** en **`app.routes.ts`**.
 5. Añadir entrada en el array **`nav`** de **`main-layout.ts`** y el ícono en el template.
+
+---
+
+## Anatomía de un componente Angular (`.ts`, `.html`, `.scss`)
+
+En Angular, un **componente** es la unidad básica de interfaz: junta **lógica** (TypeScript), **vista** (HTML) y **apariencia** (SCSS). En este proyecto los componentes son **standalone** (no dependen de un `NgModule` para declararlos).
+
+| Archivo | Rol |
+|---------|-----|
+| **`.ts`** | Clase decorada con `@Component`: qué plantilla usa, qué estilos, qué módulos de Angular/Material importa, propiedades y métodos que la vista llama. |
+| **`.html`** | Plantilla: HTML + sintaxis de Angular (enlaces, eventos, `@if`, `@for`, componentes Material). |
+| **`.scss`** | Estilos **solo de ese componente** (Angular añade encapsulación para no romper el resto de la app). Opcional si todo el aspecto viene de Material y de `styles.scss`. |
+
+El **selector** del componente (p. ej. `app-usuario-list`) solo se usa si insertas el componente en otro HTML como `<app-usuario-list />`. En este proyecto casi todo se **carga por rutas**, así que el enlace principal es la **ruta** (`loadComponent`), no el selector en un HTML padre.
+
+---
+
+## El archivo TypeScript del componente
+
+### Decorador `@Component`
+
+Ejemplo típico (lista):
+
+```ts
+@Component({
+  selector: 'app-usuario-list',
+  imports: [MatTableModule, MatButtonModule, /* ... */],
+  templateUrl: './usuario-list.html',
+  styleUrl: './usuario-list.scss',
+})
+export class UsuarioListComponent { /* ... */ }
+```
+
+- **`selector`**: nombre del tag HTML si lo usaras manualmente.
+- **`imports`**: en componentes **standalone**, aquí van **todos** los módulos de Angular Material y de `@angular/common`/`@angular/forms` que uses en el **HTML** (`MatTableModule`, `MatIconModule`, `RouterLink`, etc.). Si falta uno, el build falla o la plantilla no reconoce la directiva.
+- **`templateUrl` / `styleUrl`**: rutas al `.html` y `.scss` del mismo directorio.
+- **`template` / `styles`**: alternativa: HTML y CSS **inline** en el `.ts` (no usado aquí para mantener archivos separados).
+
+### Clase: propiedades y métodos
+
+- **Datos para la vista**: `readonly displayedColumns`, `dataSource`, `loading` — la plantilla los enlaza con `{{ }}` o `[property]`.
+- **Inyección**: `inject(MatDialog)`, `inject(UsuarioService)` — acceso a servicios sin constructor largo.
+- **Ciclo de vida**: `ngOnInit`, `ngAfterViewInit` (por ejemplo para enlazar el `MatPaginator` a `MatTableDataSource`).
+- **Diálogos**: `this.dialog.open(UsuarioDialogComponent, { data: { mode: 'edit', row } })` — el segundo argumento pasa datos al `.ts` del diálogo vía `MAT_DIALOG_DATA`.
+
+---
+
+## La plantilla HTML
+
+### Enlaces (bindings)
+
+| Sintaxis | Significado |
+|----------|-------------|
+| `{{ expresión }}` | Muestra el valor en el DOM (texto). |
+| `[prop]="valor"` | **Property binding**: pasa el valor de TypeScript a una propiedad del elemento o del componente hijo (ej. `[dataSource]="dataSource"`). |
+| `(evento)="handler($event)"` | **Event binding**: llama un método cuando ocurre el evento (click, `selectionChange`, etc.). |
+| `[class.xxx]="condición"` | Añade o quita la clase CSS según un booleano. |
+
+### Control de flujo (Angular 17+)
+
+En las plantillas de este proyecto se usa la **nueva sintaxis**:
+
+- **`@if (condición) { ... } @else { ... }`**: mostrar u ocultar bloques (spinner vs tabla).
+- **`@for (item of lista(); track item.id) { ... }`**: bucles (equivalente moderno a `*ngFor`).
+
+### Directivas Material en HTML
+
+Los componentes Material son **etiquetas personalizadas** con prefijo `mat-`:
+
+- **Contenedor**: `mat-table`, `mat-toolbar`, `mat-sidenav`, `mat-dialog-content`…
+- **Directivas**: `mat-header-cell`, `mat-cell`, `mat-list-item`, `mat-form-field`…
+
+Cada uno exige que su **módulo** correspondiente esté en el array **`imports`** del `.ts` del componente (por ejemplo `MatTableModule` para `mat-table`). La documentación oficial lista qué módulo importar: [Angular Material](https://material.angular.dev/).
+
+### Formularios
+
+- **Reactivos** (`ReactiveFormsModule`): `formControlName`, `[formGroup]` — usados en login y en muchos diálogos.
+- Los campos suelen ir dentro de **`mat-form-field`** con `mat-label`, `matInput`, `mat-select`, etc.
+
+### `index.html` y `app.html`
+
+- **`src/index.html`**: única página HTML que carga el bundle de Angular. Incluye `<app-root></app-root>` (selector del componente raíz), `<base href="/">` y enlaces a fuentes (Roboto, Material Icons).
+- **`app/app.html`**: plantilla mínima con **`<router-outlet />`**. Angular inserta aquí el componente de la ruta activa (login, o el layout `main-layout` con sus hijos). No hay menú ni cabecera en este archivo: todo eso está en **`features/shell/main-layout.html`**.
+
+### `main-layout.html` (cáscara de la aplicación autenticada)
+
+Estructura típica:
+
+- **`mat-sidenav-container`** con `#sidenavShell` y **`autosize`**: contenedor oficial de Material para drawer + contenido; `autosize` ayuda a recalcular el margen del contenido cuando cambia el ancho del menú.
+- **`mat-sidenav`**: menú lateral; clases como **`collapsed`** (vinculadas a un `signal` en el `.ts`) cambian el ancho; enlaces con **`routerLink`** y **`routerLinkActive`** para marcar la ruta activa.
+- **`mat-sidenav-content`**: zona derecha con **`mat-toolbar`** (barra superior) y un **`<main>`** con otro **`<router-outlet />`** donde se cargan las listas (`usuarios`, `productos`, etc.).
+
+---
+
+## Estilos: global vs por componente (SCSS)
+
+### Encapsulación
+
+Por defecto, Angular **añade atributos únicos** a los elementos del componente (p. ej. `_nghost_xxx`) y reescribe los selectores del `.scss` para que **solo afecten a esa plantilla**. Así evitas que `.title` de un listado rompa otro `.title` en otra pantalla.
+
+- Si necesitas un estilo que **sí** penetre en hijos profundos (p. ej. dentro de un componente Material), a veces se usa **`::ng-deep`** (en desuso a largo plazo pero aún presente en `main-layout.scss` para afinar el toolbar). En proyectos nuevos se prefieren variables CSS de Material o `host-context`.
+
+### Dónde poner cada cosa
+
+| Ubicación | Uso recomendado |
+|-----------|-----------------|
+| **`src/styles.scss`** | Tema Material (`mat.theme`), fondo del `body`, utilidades compartidas (`.dialog-body`, `.grid` para formularios de diálogo), animaciones de **View Transitions** (`::view-transition-old`, etc.). |
+| **`app/app.scss`** | Casi vacío: solo lo que afecta al host `<app-root>`. |
+| **`features/*/nombre.scss`** | Layout del listado, espaciado de la página, sombras de la tabla, **sin** repetir todo el tema. |
+| **Sin archivo `.scss` en diálogos** | Muchos diálogos confían en Material + clases globales `.dialog-body` definidas en `styles.scss`. |
+
+### Variables CSS de Material 3
+
+Tras `@include mat.theme(...)` en `styles.scss`, el navegador expone variables como:
+
+- `var(--mat-sys-primary)`
+- `var(--mat-sys-surface)`
+- `var(--mat-sys-on-surface)`
+
+En **`main-layout.scss`** se usan con `color-mix()` para fondos degradados y bordes coherentes con el tema sin hardcodear hex a mano en cada pantalla.
+
+### Ejemplos de archivos `.scss` en el proyecto
+
+| Archivo | Contenido típico |
+|---------|-------------------|
+| **`features/shell/main-layout.scss`** | Ancho del sidenav (expandido/colapsado), transiciones, estilos del **toolbar** con gradiente, lista de navegación (`.nav-item`, `.active-link`), ajustes con `::ng-deep` hacia internals de Material en la barra superior. |
+| **`features/login/login.scss`** | Centrado de la tarjeta, animación de fondo, rejilla del formulario “primer usuario”, botón de envío. |
+| **`features/*/*-list.scss`** | Cabecera de página (`.page-head`), contenedor de tabla (`.table-wrap`, sombra), celda de acciones; **no** redefine colores primarios (vienen del tema). |
+
+---
+
+## Tema Material y `styles.scss`
+
+Flujo resumido del archivo global:
+
+1. **`@use '@angular/material' as mat;`** — carga el sistema de temas Sass de Material.
+2. **`@include mat.theme(( color: (...), typography: Roboto, density: 0 ));`** en el selector **`html`**: define paletas **primary** y **tertiary** (en este proyecto violeta y cyan) y genera variables CSS para toda la app.
+3. **`body`**: `color-scheme`, fondo con gradientes suaves, tipografía por defecto.
+4. **Bloque `@supports (view-transition-name: ...)`**: animaciones opcionales cuando el navegador soporta transiciones entre vistas del router.
+5. **Clases `.dialog-body`**: rejilla para formularios dentro de `MatDialog` (evita duplicar el mismo grid en cada `*-dialog.html`).
+
+El **`index.html`** carga **Roboto** y la fuente de **Material Icons** por CDN; el `<base href="/">` es necesario para que el router y los assets resuelvan bien en producción.
+
+---
+
+## Ejemplo de flujo: lista CRUD
+
+1. El usuario navega a **`/app/usuarios`** → el router carga **`usuario-list`** (lazy).
+2. **`usuario-list.ts`**: en el constructor o al iniciar llama `this.usuarioService.list()` → rellena `MatTableDataSource`.
+3. **`usuario-list.html`**: `mat-table` lee `dataSource`; columnas definidas con `matColumnDef` / `*matHeaderCellDef` / `*matCellDef`.
+4. Clic en **Nuevo** → `nuevo()` abre **`UsuarioDialogComponent`** con `{ mode: 'create' }`.
+5. **`usuario-dialog.ts`**: lee `MAT_DIALOG_DATA`, construye el formulario; al guardar llama `usuarioService.create()` o `update()`.
+6. Al cerrar el diálogo con éxito, la lista vuelve a llamar `reload()` para refrescar la tabla.
+
+Los **estilos** de la tabla (`.page-head`, `.table-wrap`) están en **`usuario-list.scss`**; la apariencia de botones y tabla viene en gran parte de **Material** y del tema global.
 
 ---
 
